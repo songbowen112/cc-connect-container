@@ -27,6 +27,7 @@ mkdir -p "$SCRIPT_DIR/data"
 podman run -d \
     --name "$CONTAINER_NAME" \
     --restart unless-stopped \
+    --stop-timeout 30 \
     --add-host host.containers.internal:host-gateway \
     -v "$SCRIPT_DIR/data:/home/vscode/.cc-connect:Z" \
     --mount type=tmpfs,destination=/home/vscode/.cc-connect/run,tmpfs-size=16m,tmpfs-mode=1777 \
@@ -41,9 +42,7 @@ podman run -d \
     -e https_proxy= \
     -e HTTP_PROXY= \
     -e HTTPS_PROXY= \
-    --entrypoint /bin/bash \
-    "$IMAGE_NAME" \
-    -lc 'socat TCP-LISTEN:15721,bind=127.0.0.1,fork,reuseaddr TCP:host.containers.internal:15721 & exec cc-connect --config /home/vscode/.cc-connect/config.toml'
+    "$IMAGE_NAME"
 
 echo ">>> 容器已启动"
 echo ">>> 查看日志: podman logs -f $CONTAINER_NAME"

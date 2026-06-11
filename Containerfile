@@ -1,11 +1,11 @@
 # 基于微软 devcontainer 镜像（自带 git/curl/sudo/build-essential 等）
 FROM mcr.microsoft.com/devcontainers/base:ubuntu24.04
 
-# 构建时代理（通过 host.containers.internal 访问宿主机代理）
-ENV http_proxy="http://host.containers.internal:7897"
-ENV https_proxy="http://host.containers.internal:7897"
-ENV HTTP_PROXY="http://host.containers.internal:7897"
-ENV HTTPS_PROXY="http://host.containers.internal:7897"
+# 构建时代理（仅在 RUN 期间生效，不会泄漏到运行时）
+ARG http_proxy="http://host.containers.internal:7897"
+ARG https_proxy="http://host.containers.internal:7897"
+ARG HTTP_PROXY="http://host.containers.internal:7897"
+ARG HTTPS_PROXY="http://host.containers.internal:7897"
 
 # ============================================================
 # 系统工具（镜像已含大部分，补充缺失的）
@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     jq htop tree file which rsync \
     sqlite3 libsqlite3-dev \
     dnsutils iputils-ping net-tools \
-    tzdata \
+    tzdata tini \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ============================================================
@@ -121,6 +121,22 @@ RUN mkdir -p /home/vscode/.cc-connect
 
 ENV PATH="/home/vscode/.nvm/versions/node/v24.14.0/bin:/home/vscode/.local/bin:/home/vscode/.venv/bin:${PATH}"
 
+# ============================================================
+# 入口脚本（tini 管理进程 + socat 代理转发）
+# ============================================================
+RUN printf '%s\n' \
+    '#!/bin/bash' \
+    'set -e' \
+    '' \
+    '# cc-switch 本地代理转发（连宿主机 15721）' \
+    'socat TCP-LISTEN:15721,bind=127.0.0.1,fork,reuseaddr \' \
+    '    TCP:host.containers.internal:15721 &' \
+    '' \
+    '# 启动 cc-connect' \
+    'exec cc-connect --config /home/vscode/.cc-connect/config.toml' \
+    > /home/vscode/entrypoint.sh && \
+    chmod +x /home/vscode/entrypoint.sh
+
 WORKDIR /home/vscode
-ENTRYPOINT ["cc-connect"]
-CMD ["--config", "/home/vscode/.cc-connect/config.toml"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/home/vscode/entrypoint.sh"]
+CMD []
