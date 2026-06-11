@@ -1,0 +1,9 @@
+# 数据目录
+data/
+
+# macOS
+.DS_Store
+
+# 临时文件
+*.tmp
+*.log
