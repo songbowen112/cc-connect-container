@@ -37,6 +37,10 @@ podman run -d \
     -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
     -e OLLAMA_HOST="http://host.containers.internal:11434" \
     -e GIT_TERMINAL_PROMPT=0 \
+    -e http_proxy= \
+    -e https_proxy= \
+    -e HTTP_PROXY= \
+    -e HTTPS_PROXY= \
     --entrypoint /bin/bash \
     "$IMAGE_NAME" \
     -lc 'socat TCP-LISTEN:15721,bind=127.0.0.1,fork,reuseaddr TCP:host.containers.internal:15721 & exec cc-connect --config /home/vscode/.cc-connect/config.toml'

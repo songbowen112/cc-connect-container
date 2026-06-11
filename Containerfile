@@ -1,6 +1,12 @@
 # 基于微软 devcontainer 镜像（自带 git/curl/sudo/build-essential 等）
 FROM mcr.microsoft.com/devcontainers/base:ubuntu24.04
 
+# 构建时代理（通过 host.containers.internal 访问宿主机代理）
+ENV http_proxy="http://host.containers.internal:7897"
+ENV https_proxy="http://host.containers.internal:7897"
+ENV HTTP_PROXY="http://host.containers.internal:7897"
+ENV HTTPS_PROXY="http://host.containers.internal:7897"
+
 # ============================================================
 # 系统工具（镜像已含大部分，补充缺失的）
 # ============================================================
@@ -92,6 +98,14 @@ RUN echo 'source /home/vscode/.venv/bin/activate' >> /home/vscode/.bashrc && \
 # Ollama 连宿主机
 RUN echo 'export OLLAMA_HOST="http://host.containers.internal:11434"' >> /home/vscode/.bashrc && \
     echo 'export OLLAMA_HOST="http://host.containers.internal:11434"' >> /home/vscode/.zshrc
+
+# 代理管理函数（默认关闭，通过 px/pxs/upx 控制）
+# 插入到 .bashrc 最开头（非交互式检查之前）
+RUN printf '%s\n' \
+    'px() { export http_proxy="http://host.containers.internal:7897"; export https_proxy="http://host.containers.internal:7897"; export HTTP_PROXY="http://host.containers.internal:7897"; export HTTPS_PROXY="http://host.containers.internal:7897"; echo "Proxy enabled: http://host.containers.internal:7897"; }' \
+    'pxs() { if [ -n "$http_proxy" ]; then echo "Proxy enabled: $http_proxy"; else echo "⚠️ Proxy 未开启"; fi; }' \
+    'upx() { unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY; echo "Proxy disabled"; }' \
+    | cat - /home/vscode/.bashrc > /tmp/bashrc && mv /tmp/bashrc /home/vscode/.bashrc
 
 # PATH
 RUN echo 'export PATH="/home/vscode/.local/bin:/home/vscode/.venv/bin:$PATH"' >> /home/vscode/.bashrc
