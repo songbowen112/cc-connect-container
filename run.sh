@@ -21,7 +21,7 @@ DATA_DIR="${DATA_DIR:-$SCRIPT_DIR/data}"
 MEMORY_LIMIT="${MEMORY_LIMIT:-4g}"
 CPU_LIMIT="${CPU_LIMIT:-4}"
 
-# 代理端口（构建和运行时使用，0 表示禁用）
+# 代理端口（仅用于构建，0 表示禁用。运行时默认不走代理）
 PROXY_PORT="${PROXY_PORT:-7897}"
 
 # 加载 .env 文件（优先级高于默认值）
@@ -73,24 +73,9 @@ echo ">>> 启动 claude-agent 容器..."
 
 mkdir -p "$DATA_DIR" "$CC_HOME_DIR"
 
-# 代理环境变量（WebSearch 等工具需要，自动检测宿主机代理状态）
-if [ "$PROXY_PORT" != "0" ] && curl -s --max-time 2 "http://127.0.0.1:$PROXY_PORT" >/dev/null 2>&1; then
-    PROXY_ENV=(
-        -e http_proxy="http://host.containers.internal:$PROXY_PORT"
-        -e https_proxy="http://host.containers.internal:$PROXY_PORT"
-        -e HTTP_PROXY="http://host.containers.internal:$PROXY_PORT"
-        -e HTTPS_PROXY="http://host.containers.internal:$PROXY_PORT"
-    )
-    echo ">>> 代理已注入容器 (host.containers.internal:$PROXY_PORT)"
-else
-    PROXY_ENV=(
-        -e http_proxy=
-        -e https_proxy=
-        -e HTTP_PROXY=
-        -e HTTPS_PROXY=
-    )
-    echo ">>> ⚠ 代理不可达，容器无代理运行（WebSearch 可能不可用）"
-fi
+# 代理不自动注入容器运行时环境
+# 构建时走代理即可，运行时默认不走代理
+# 容器内需要时手动执行 px() 开启，用完后 upx() 关闭
 
 podman run -d \
     --name "$CONTAINER_NAME" \
@@ -109,7 +94,6 @@ podman run -d \
     -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
     -e OLLAMA_HOST="http://host.containers.internal:11434" \
     -e GIT_TERMINAL_PROMPT=0 \
-    "${PROXY_ENV[@]}" \
     "$IMAGE_NAME"
 
 # ============================================================
