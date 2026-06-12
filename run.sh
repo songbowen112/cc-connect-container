@@ -54,6 +54,8 @@ if [[ "${1:-}" == "--build" ]] || ! podman image exists "$IMAGE_NAME" 2>/dev/nul
     fi
 
     podman build --format docker -t "$IMAGE_NAME" -f "$SCRIPT_DIR/Containerfile" "${BUILD_ARGS[@]:-}"
+    echo ">>> 清理旧镜像..."
+    podman image prune -f 2>/dev/null || true
     echo ">>> 镜像构建完成"
 fi
 
