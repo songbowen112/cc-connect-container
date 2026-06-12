@@ -94,6 +94,7 @@ fi
 
 podman run -d \
     --name "$CONTAINER_NAME" \
+    --user vscode \
     --restart unless-stopped \
     --stop-timeout 30 \
     --memory "$MEMORY_LIMIT" \
