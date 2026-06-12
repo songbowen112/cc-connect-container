@@ -1,6 +1,16 @@
 # 基于微软 devcontainer 镜像（自带 git/curl/sudo/build-essential 等）
 FROM mcr.microsoft.com/devcontainers/base:ubuntu24.04
 
+# ============================================================
+# OCI 镜像标签
+# ============================================================
+LABEL org.opencontainers.image.title="claude-agent"
+LABEL org.opencontainers.image.description="cc-connect + Claude Code 全功能 AI Agent 容器"
+LABEL org.opencontainers.image.version="1.0.0"
+LABEL org.opencontainers.image.source="https://github.com/songbowen112/cc-connect-container"
+LABEL org.opencontainers.image.authors="songon"
+LABEL org.opencontainers.image.licenses="MIT"
+
 # 构建时代理（默认不开启，需时通过 podman build --build-arg 传入）
 ARG http_proxy=""
 ARG https_proxy=""
@@ -122,9 +132,14 @@ RUN printf '%s\n' \
     '#!/bin/bash' \
     'set -e' \
     '' \
-    '# cc-switch 本地代理转发（连宿主机 15721）' \
-    'socat TCP-LISTEN:15721,bind=127.0.0.1,fork,reuseaddr \' \
-    '    TCP:host.containers.internal:15721 &' \
+    '# cc-switch 本地代理转发（异常退出自动重连）' \
+    '(' \
+    '  until socat TCP-LISTEN:15721,bind=127.0.0.1,fork,reuseaddr \' \
+    '      TCP:host.containers.internal:15721; do' \
+    '    echo "socat: connection lost, restarting in 1s..." >&2' \
+    '    sleep 1' \
+    '  done' \
+    ') &' \
     '' \
     '# 启动 cc-connect' \
     'exec cc-connect --config /home/vscode/.cc-connect/config.toml' \
@@ -132,5 +147,10 @@ RUN printf '%s\n' \
     chmod +x /home/vscode/entrypoint.sh
 
 WORKDIR /home/vscode
+
+# 健康检查：确保 cc-connect 进程存活
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+  CMD pgrep -f "cc-connect --config" >/dev/null || exit 1
+
 ENTRYPOINT ["/usr/bin/tini", "--", "/home/vscode/entrypoint.sh"]
 CMD []
