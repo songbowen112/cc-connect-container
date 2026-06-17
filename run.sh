@@ -87,7 +87,8 @@ podman run -d \
     --add-host host.containers.internal:host-gateway \
     -v "$DATA_DIR:/home/vscode/.cc-connect:Z" \
     --mount type=tmpfs,destination=/home/vscode/.cc-connect/run,tmpfs-size=16m,tmpfs-mode=1777 \
-    -v "$CLAUDE_CONFIG_DIR:/home/vscode/.claude:Z" \
+    -v "$CLAUDE_CONFIG_DIR/settings.json:/home/vscode/.claude/settings.json:Z" \
+    -v "$CLAUDE_CONFIG_DIR/CLAUDE.md:/home/vscode/.claude/CLAUDE.md:ro,Z" \
     -v "$SSH_DIR:/home/vscode/.ssh:ro,Z" \
     -v "$REPOSITORY_DIR:/home/vscode/repository:Z" \
     -v "$CC_HOME_DIR:/home/vscode/cc-home:Z" \

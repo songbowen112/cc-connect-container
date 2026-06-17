@@ -44,7 +44,9 @@ RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | b
     . /home/vscode/.nvm/nvm.sh && \
     nvm install 24.14.0 && \
     nvm alias default 24.14.0 && \
+    npm config set registry https://registry.npmmirror.com && \
     npm install -g npm@11.9.0 && \
+    npm config set registry https://registry.npmmirror.com && \
     npm install -g cc-connect@1.3.2 @anthropic-ai/claude-code@2.1.173
 
 # ============================================================
@@ -121,7 +123,7 @@ RUN mkdir -p /Users && ln -sf /home/vscode /Users/songon && \
 
 # cc-connect 数据目录
 USER vscode
-RUN mkdir -p /home/vscode/.cc-connect
+RUN mkdir -p /home/vscode/.cc-connect /home/vscode/.claude
 
 ENV PATH="/home/vscode/.nvm/versions/node/v24.14.0/bin:/home/vscode/.local/bin:/home/vscode/.venv/bin:${PATH}"
 
