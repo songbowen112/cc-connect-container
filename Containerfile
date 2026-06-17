@@ -47,7 +47,7 @@ RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | b
     npm config set registry https://registry.npmmirror.com && \
     npm install -g npm@11.9.0 && \
     npm config set registry https://registry.npmmirror.com && \
-    npm install -g cc-connect@1.3.2 @anthropic-ai/claude-code@2.1.173
+    npm install -g cc-connect@1.3.2 @anthropic-ai/claude-code@2.1.173 bun
 
 # ============================================================
 # SDKMAN: JDK 21 + Maven 3.9.14
