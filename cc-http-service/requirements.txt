@@ -1,0 +1,6 @@
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+sse-starlette>=2.0.0
+pydantic>=2.6.0
+claude-agent-sdk>=0.1.6
+python-multipart>=0.0.9

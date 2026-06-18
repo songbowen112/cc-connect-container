@@ -22,7 +22,7 @@ ARG HTTPS_PROXY=""
 # ============================================================
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bsdmainutils bison mercurial \
-    jq htop tree file which rsync \
+    jq htop tree file which rsync socat \
     sqlite3 libsqlite3-dev \
     dnsutils iputils-ping net-tools \
     tzdata tini \
@@ -128,7 +128,16 @@ RUN mkdir -p /home/vscode/.cc-connect /home/vscode/.claude
 ENV PATH="/home/vscode/.nvm/versions/node/v24.14.0/bin:/home/vscode/.local/bin:/home/vscode/.venv/bin:${PATH}"
 
 # ============================================================
-# 入口脚本（tini 管理进程 + socat 代理转发）
+# Claude Code HTTP Service (FastAPI + claude-agent-sdk)
+# ============================================================
+COPY --chown=vscode:vscode cc-http-service /home/vscode/cc-http-service
+RUN /home/vscode/.local/bin/uv pip install --python /home/vscode/.venv/bin/python \
+    -r /home/vscode/cc-http-service/requirements.txt \
+    -i https://mirrors.aliyun.com/pypi/simple/ \
+    && mkdir -p /home/vscode/cc-http-uploads
+
+# ============================================================
+# 入口脚本（tini 管理进程 + socat 代理转发 + HTTP 服务后台启动）
 # ============================================================
 RUN printf '%s\n' \
     '#!/bin/bash' \
@@ -143,7 +152,17 @@ RUN printf '%s\n' \
     '  done' \
     ') &' \
     '' \
-    '# 启动 cc-connect' \
+    '# Claude Code HTTP 服务（后台）' \
+    'echo ">>> Starting Claude Code HTTP service on ${HTTP_HOST:-0.0.0.0}:${HTTP_PORT:-8765}..." >&2' \
+    '# 如果设置了 ANTHROPIC_AUTH_TOKEN 但没设 ANTHROPIC_API_KEY,把前者镜像到后者' \
+    '# (claude-agent-sdk 默认读 ANTHROPIC_API_KEY,而 settings.json 习惯用 AUTH_TOKEN)' \
+    'if [ -n "$ANTHROPIC_AUTH_TOKEN" ] && [ -z "$ANTHROPIC_API_KEY" ] && [ "$ANTHROPIC_AUTH_TOKEN" != "PROXY_MANAGED" ]; then' \
+    '  export ANTHROPIC_API_KEY="$ANTHROPIC_AUTH_TOKEN"' \
+    'fi' \
+    'nohup /home/vscode/.venv/bin/python /home/vscode/cc-http-service/run.py > /tmp/cc-http.log 2>&1 &' \
+    'echo ">>> HTTP API key: $([ -n \"$HTTP_API_KEY\" ] && echo enabled || echo disabled)" >&2' \
+    '' \
+    '# 启动 cc-connect 前台' \
     'exec cc-connect --config /home/vscode/.cc-connect/config.toml' \
     > /home/vscode/entrypoint.sh && \
     chmod +x /home/vscode/entrypoint.sh

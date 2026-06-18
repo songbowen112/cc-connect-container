@@ -122,6 +122,32 @@ podman inspect claude-agent --format '{{.State.Health.Status}}'
 | Git | latest | 版本管理 |
 | SQLite | 3.45 | 数据查询 |
 
+## HTTP 远程调用（同网段程序化访问 cc）
+
+容器内 `cc-http-service` 把 Claude Code 暴露为 HTTP/SSE 接口,同网段机器可直接 `curl` 调,无需走飞书通道。
+
+```bash
+# 加载鉴权 token
+source .env && export HTTP_API_KEY
+
+# 同步 query
+curl -X POST http://localhost:8765/v1/query \
+  -H "Authorization: Bearer $HTTP_API_KEY" -H "Content-Type: application/json" \
+  -d '{"prompt":"1+1?","model":"haiku","permission_mode":"bypassPermissions"}'
+
+# 流式 query(SSE)
+curl -N -X POST http://localhost:8765/v1/query/stream \
+  -H "Authorization: Bearer $HTTP_API_KEY" -H "Content-Type: application/json" \
+  -d '{"prompt":"分析当前目录"}'
+```
+
+10 个端点(`/v1/query`、`/v1/sessions/{sid}/send` 等)完整文档:
+- Markdown: [cc-http-service/API.md](cc-http-service/API.md)
+- OpenAPI(导入 Apifox): [cc-http-service/openapi.json](cc-http-service/openapi.json)
+- 测试: `bash cc-http-service/tests/test_api.sh`
+
+`.claude/skills/cc-http-bridge/` 内置了 4 个开箱即用脚本(sync / stream / session REPL / upload),Claude Code 触发 skill 后可直接 `Bash` 调它们。
+
 ## 飞书配置要点
 
 1. 飞书开放平台创建**企业自建应用**
