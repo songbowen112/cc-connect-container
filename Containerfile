@@ -152,15 +152,19 @@ RUN printf '%s\n' \
     '  done' \
     ') &' \
     '' \
-    '# Claude Code HTTP 服务（后台）' \
-    'echo ">>> Starting Claude Code HTTP service on ${HTTP_HOST:-0.0.0.0}:${HTTP_PORT:-8765}..." >&2' \
-    '# 如果设置了 ANTHROPIC_AUTH_TOKEN 但没设 ANTHROPIC_API_KEY,把前者镜像到后者' \
-    '# (claude-agent-sdk 默认读 ANTHROPIC_API_KEY,而 settings.json 习惯用 AUTH_TOKEN)' \
-    'if [ -n "$ANTHROPIC_AUTH_TOKEN" ] && [ -z "$ANTHROPIC_API_KEY" ] && [ "$ANTHROPIC_AUTH_TOKEN" != "PROXY_MANAGED" ]; then' \
-    '  export ANTHROPIC_API_KEY="$ANTHROPIC_AUTH_TOKEN"' \
+    '# Claude Code HTTP 服务(可选,默认关闭;由 HTTP_SERVICE_ENABLED 控制)' \
+    'if [ "${HTTP_SERVICE_ENABLED:-false}" = "true" ]; then' \
+    '  echo ">>> Starting Claude Code HTTP service on ${HTTP_HOST:-0.0.0.0}:${HTTP_PORT:-8765}..." >&2' \
+    '  # 如果设置了 ANTHROPIC_AUTH_TOKEN 但没设 ANTHROPIC_API_KEY,把前者镜像到后者' \
+    '  # (claude-agent-sdk 默认读 ANTHROPIC_API_KEY,而 settings.json 习惯用 AUTH_TOKEN)' \
+    '  if [ -n "$ANTHROPIC_AUTH_TOKEN" ] && [ -z "$ANTHROPIC_API_KEY" ] && [ "$ANTHROPIC_AUTH_TOKEN" != "PROXY_MANAGED" ]; then' \
+    '    export ANTHROPIC_API_KEY="$ANTHROPIC_AUTH_TOKEN"' \
+    '  fi' \
+    '  nohup /home/vscode/.venv/bin/python /home/vscode/cc-http-service/run.py > /tmp/cc-http.log 2>&1 &' \
+    '  echo ">>> HTTP API key: $([ -n \"$HTTP_API_KEY\" ] && echo enabled || echo disabled)" >&2' \
+    'else' \
+    '  echo ">>> HTTP 服务未启用 (设置 HTTP_SERVICE_ENABLED=true 开启)" >&2' \
     'fi' \
-    'nohup /home/vscode/.venv/bin/python /home/vscode/cc-http-service/run.py > /tmp/cc-http.log 2>&1 &' \
-    'echo ">>> HTTP API key: $([ -n \"$HTTP_API_KEY\" ] && echo enabled || echo disabled)" >&2' \
     '' \
     '# 启动 cc-connect 前台' \
     'exec cc-connect --config /home/vscode/.cc-connect/config.toml' \

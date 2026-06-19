@@ -21,7 +21,8 @@ DATA_DIR="${DATA_DIR:-$SCRIPT_DIR/data}"
 MEMORY_LIMIT="${MEMORY_LIMIT:-4g}"
 CPU_LIMIT="${CPU_LIMIT:-4}"
 
-# HTTP 服务配置
+# HTTP 服务开关(默认关闭)
+HTTP_SERVICE_ENABLED="${HTTP_SERVICE_ENABLED:-false}"
 HTTP_PORT="${HTTP_PORT:-8765}"
 HTTP_API_KEY="${HTTP_API_KEY:-}"
 
@@ -46,9 +47,10 @@ if [ -f "$SCRIPT_DIR/.env" ]; then
     set +a
 fi
 
-# HTTP 服务鉴权:如果用户没设 HTTP_API_KEY,自动生成一个随机 token 并写入 .env
-# (避免服务在局域网下裸奔;后续用户可在 .env 里手动改成自己想要的)
-if [ -z "${HTTP_API_KEY:-}" ]; then
+# HTTP 服务鉴权:仅在 HTTP_SERVICE_ENABLED=true 时,如果用户没设 HTTP_API_KEY,
+# 自动生成一个随机 token 并写入 .env(避免服务在局域网下裸奔)。
+# 用户也可在 .env 里手动改成自己想要的;不开服务时完全不读 HTTP_API_KEY,避免误以为启用了鉴权。
+if [ "$HTTP_SERVICE_ENABLED" = "true" ] && [ -z "${HTTP_API_KEY:-}" ]; then
     if command -v openssl >/dev/null 2>&1; then
         HTTP_API_KEY=$(openssl rand -hex 24)
     else
@@ -113,6 +115,21 @@ mkdir -p "$DATA_DIR" "$CC_HOME_DIR"
 # 构建时走代理即可，运行时默认不走代理
 # 容器内需要时手动执行 px() 开启，用完后 upx() 关闭
 
+# HTTP 服务相关参数(仅在开关启用时追加)
+HTTP_RUN_ARGS=()
+HTTP_VOLUMES=()
+if [ "$HTTP_SERVICE_ENABLED" = "true" ]; then
+    HTTP_RUN_ARGS+=(
+        -p "${HTTP_PORT}:8765"
+        -v "$SCRIPT_DIR/cc-http-uploads:/home/vscode/cc-http-uploads:Z"
+        -e HTTP_API_KEY="$HTTP_API_KEY"
+        -e HTTP_PORT=8765
+        -e HTTP_SERVICE_ENABLED=true
+    )
+    HTTP_VOLUMES=()
+    mkdir -p "$SCRIPT_DIR/cc-http-uploads"
+fi
+
 podman run -d \
     --name "$CONTAINER_NAME" \
     --user vscode \
@@ -121,7 +138,6 @@ podman run -d \
     --memory "$MEMORY_LIMIT" \
     --cpus "$CPU_LIMIT" \
     --add-host host.containers.internal:host-gateway \
-    -p "${HTTP_PORT}:8765" \
     -v "$DATA_DIR:/home/vscode/.cc-connect:Z" \
     --mount type=tmpfs,destination=/home/vscode/.cc-connect/run,tmpfs-size=16m,tmpfs-mode=1777 \
     -v "$CLAUDE_CONFIG_DIR/settings.json:/home/vscode/.claude/settings.json:Z" \
@@ -129,13 +145,11 @@ podman run -d \
     -v "$SSH_DIR:/home/vscode/.ssh:ro,Z" \
     -v "$REPOSITORY_DIR:/home/vscode/repository:Z" \
     -v "$CC_HOME_DIR:/home/vscode/cc-home:Z" \
-    -v "$SCRIPT_DIR/cc-http-uploads:/home/vscode/cc-http-uploads:Z" \
     -e ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}" \
     -e OLLAMA_HOST="http://host.containers.internal:11434" \
     -e GIT_TERMINAL_PROMPT=0 \
-    -e HTTP_API_KEY="$HTTP_API_KEY" \
-    -e HTTP_PORT=8765 \
-    "${CLAUDE_ENV_ARGS[@]}" \
+    ${HTTP_RUN_ARGS[@]+"${HTTP_RUN_ARGS[@]}"} \
+    ${CLAUDE_ENV_ARGS[@]+"${CLAUDE_ENV_ARGS[@]}"} \
     "$IMAGE_NAME"
 
 # ============================================================
@@ -153,29 +167,31 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
-# 等 HTTP 服务起来
-echo ">>> 等待 HTTP 服务就绪..."
-HTTP_READY=0
-for i in $(seq 1 30); do
-  if curl -s --max-time 2 "http://127.0.0.1:${HTTP_PORT}/health" >/dev/null 2>&1; then
-    echo ">>> ✓ HTTP 服务已就绪 (端口 ${HTTP_PORT})"
-    HTTP_READY=1
-    break
-  fi
-  sleep 1
-done
-if [ "$HTTP_READY" -eq 0 ]; then
-  echo ">>> ⚠ HTTP 服务未就绪，查看日志: podman exec $CONTAINER_NAME cat /tmp/cc-http.log"
-fi
+# 等 HTTP 服务起来(仅在启用时等)
+if [ "$HTTP_SERVICE_ENABLED" = "true" ]; then
+    echo ">>> 等待 HTTP 服务就绪..."
+    HTTP_READY=0
+    for i in $(seq 1 30); do
+      if curl -s --max-time 2 "http://127.0.0.1:${HTTP_PORT}/health" >/dev/null 2>&1; then
+        echo ">>> ✓ HTTP 服务已就绪 (端口 ${HTTP_PORT})"
+        HTTP_READY=1
+        break
+      fi
+      sleep 1
+    done
+    if [ "$HTTP_READY" -eq 0 ]; then
+      echo ">>> ⚠ HTTP 服务未就绪，查看日志: podman exec $CONTAINER_NAME cat /tmp/cc-http.log"
+    fi
 
-echo ">>> 调用方法:"
-echo ">>>   健康检查:   curl http://localhost:${HTTP_PORT}/health"
-if [ -n "$HTTP_API_KEY" ]; then
-  echo ">>>   带鉴权:    curl -H 'Authorization: Bearer ${HTTP_API_KEY}' http://localhost:${HTTP_PORT}/v1/query -d '{\"prompt\":\"hi\"}' -H 'Content-Type: application/json'"
+    echo ">>> 调用方法:"
+    echo ">>>   健康检查:   curl http://localhost:${HTTP_PORT}/health"
+    if [ -n "$HTTP_API_KEY" ]; then
+      echo ">>>   带鉴权:    curl -H 'Authorization: Bearer ${HTTP_API_KEY}' http://localhost:${HTTP_PORT}/v1/query -d '{\"prompt\":\"hi\"}' -H 'Content-Type: application/json'"
+    fi
+    echo ">>>   详细文档:   http://localhost:${HTTP_PORT}/docs"
+    echo ">>> HTTP日志:   podman exec $CONTAINER_NAME cat /tmp/cc-http.log"
 fi
-echo ">>>   详细文档:   http://localhost:${HTTP_PORT}/docs"
 echo ""
 echo ">>> 查看日志:   podman logs -f $CONTAINER_NAME"
-echo ">>> HTTP日志:   podman exec $CONTAINER_NAME cat /tmp/cc-http.log"
 echo ">>> 状态:       podman ps --filter name=$CONTAINER_NAME"
 echo ">>> 停止:       podman rm -f $CONTAINER_NAME"
